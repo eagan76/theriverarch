@@ -1,0 +1,228 @@
+#!/bin/bash
+
+# Step 1: Update system and install dependencies
+echo "Updating system and installing dependencies..."
+sudo pacman -S --needed \
+    base-devel \
+    gcc \
+    meson \
+    wlroots \
+    wayland \
+    wayland-protocols \
+    libseat \
+    libdrm \
+    pango \
+    gtk-layer-shell \
+    cairo \
+    jsoncpp \
+    sddm kitty rofi waybar
+
+# Step 2: Install River from AUR (using yay)
+echo "Installing River from AUR..."
+yay -S river-git sddm-candy-theme-git
+
+# Step 3: Set up SDDM with Candy theme and custom gradient background
+echo "Configuring SDDM with the Candy theme and custom gradient background..."
+
+# Set SDDM to use the Candy theme
+sudo mkdir -p /etc/sddm.conf.d
+sudo tee /etc/sddm.conf.d/theme.conf > /dev/null <<EOF
+[Theme]
+Current=candy
+EOF
+
+# Create custom gradient background for SDDM Candy theme
+sudo mkdir -p /usr/share/sddm/themes/candy/custom_backgrounds
+sudo tee /usr/share/sddm/themes/candy/custom_backgrounds/gradient.svg > /dev/null <<EOF
+<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:yellow;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:purple;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#grad1)" />
+  <text x="50%" y="60%" font-family="monospace" font-size="80" fill="black" text-anchor="middle">Stickman-OS</text>
+</svg>
+EOF
+
+# Update SDDM Candy theme to use custom background
+sudo sed -i 's|background=.*|background=/usr/share/sddm/themes/candy/custom_backgrounds/gradient.svg|' /usr/share/sddm/themes/candy/theme.conf.user
+
+# Enable SDDM service to start on boot
+sudo systemctl enable sddm.service
+sudo systemctl start sddm.service
+
+# Step 4: Create a custom session file for River in SDDM
+echo "Setting up River as a session in SDDM..."
+sudo tee /usr/share/wayland-sessions/river.desktop > /dev/null <<EOF
+[Desktop Entry]
+Name=River
+Comment=River Window Manager
+Exec=/usr/bin/river
+Type=Application
+DesktopNames=river
+EOF
+
+# Step 5: Configure Waybar with EndeavourOS logo, modern, fully rounded theme
+echo "Setting up Waybar configuration..."
+mkdir -p ~/.config/waybar
+mkdir -p ~/.config/waybar/icons
+
+# Place EndeavourOS logo in the icons folder
+curl -o ~/.config/waybar/icons/endeavour.png "https://upload.wikimedia.org/wikipedia/commons/6/69/EndeavourOS_Logo.png"
+
+tee ~/.config/waybar/config.json > /dev/null <<EOF
+{
+    "layer": "top",
+    "position": "top",
+    "height": 35,
+    "margin": 10,
+    "modules-left": ["custom/endeavour", "workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["custom/notifications", "network", "cpu", "memory", "battery"],
+
+    "custom/endeavour": {
+        "exec": "echo ' '",
+        "return-type": "json",
+        "tooltip": "Applications",
+        "click": "rofi -show drun",
+        "icon": "~/.config/waybar/icons/endeavour.png"
+    },
+    
+    "workspaces": {
+        "format": "{icon}",
+        "icon-map": {
+            "1": "", "2": "", "3": "", "4": "",
+            "5": "", "6": "", "7": "", "8": "", "9": ""
+        },
+        "on-click": "riverctl switch-to-workspace {name}",
+        "underline": true,
+        "max-icons": 9
+    },
+
+    "clock": {
+        "format": "{:%A, %B %d - %H:%M}",
+        "interval": 60
+    },
+
+    "custom/notifications": {
+        "exec": "notify-send 'No new notifications'",
+        "return-type": "json",
+        "click": "notify-send 'Checking notifications...'",
+        "tooltip": "Notifications"
+    },
+
+    "network": {
+        "format": "{ifname} {ipaddr}"
+    },
+
+    "cpu": {
+        "format": "CPU: {usage}%"
+    },
+
+    "memory": {
+        "format": "RAM: {usedMem} MB"
+    },
+
+    "battery": {
+        "format": "{icon} {percent}%",
+        "tooltip": "Battery",
+        "percentage": true
+    },
+
+    "style": {
+        "bar": {
+            "background": "#1E1E2EAA",
+            "border-radius": 20,
+            "padding": 8
+        },
+        "separator": {
+            "background": "#1E1E2EAA"
+        }
+    }
+}
+EOF
+
+# Step 6: Configure Waybar style with rounded and clean look
+tee ~/.config/waybar/style.css > /dev/null <<EOF
+* {
+    color: #E1E1E1;
+    font-family: "monospace";
+    border-radius: 20px;
+}
+
+#workspaces {
+    border-radius: 20px;
+}
+
+#custom-endeavour {
+    font-size: 18px;
+    color: #E5E9F0;
+    border-radius: 20px;
+    padding: 8px;
+}
+
+#custom-notifications {
+    font-size: 18px;
+    border-radius: 20px;
+    padding: 8px;
+}
+
+#clock {
+    font-size: 18px;
+    font-weight: bold;
+    color: #A3BE8C;
+    border-radius: 20px;
+    padding: 8px;
+}
+
+#network, #cpu, #memory, #battery {
+    font-size: 14px;
+    padding: 8px;
+    color: #B48EAD;
+    border-radius: 20px;
+}
+EOF
+
+# Step 7: Configure River keybindings
+echo "Configuring keybindings in River..."
+mkdir -p ~/.config/river
+tee ~/.config/river/init > /dev/null <<EOF
+# Keybindings for River
+
+# Open Kitty terminal with Control+Enter
+riverctl map normal Ctrl+Return spawn kitty
+
+# Open Rofi with Control+D
+riverctl map normal Ctrl+D spawn "rofi -show drun"
+
+# Close a window with Control+Q
+riverctl map normal Ctrl+Q close
+
+# Kill a window with Control+Shift+Q
+riverctl map normal Ctrl+Shift+Q kill
+
+# Move focused window with Control+Arrow Keys
+riverctl map normal Ctrl+Left send-to-output left
+riverctl map normal Ctrl+Right send-to-output right
+riverctl map normal Ctrl+Up send-to-workspace previous
+riverctl map normal Ctrl+Down send-to-workspace next
+EOF
+
+# Step 8: Set monospace as the default system font
+echo "Setting monospace font as the default across the system..."
+
+# GTK font settings for applications
+mkdir -p ~/.config/gtk-3.0
+echo '[Settings]' > ~/.config/gtk-3.0/settings.ini
+echo 'gtk-font-name=Monospace 11' >> ~/.config/gtk-3.0/settings.ini
+
+# Qt font settings for applications
+mkdir -p ~/.config/QtProject
+echo '[General]' > ~/.config/QtProject/qt5ct.conf
+echo 'font=Monospace,11,-1,5,50,0,0,0,0,0' >> ~/.config/QtProject/qt5ct.conf
+
+echo "Setup complete! River, Waybar, Rofi, and Kitty are installed and configured with custom keybindings, and monospace is set as the default system font."
+echo "SDDM is set up with the Candy theme, custom gradient background, and Stickman-OS text."
+echo "You can select 'River' from the SDDM login screen to start your new setup."
